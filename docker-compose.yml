@@ -1,0 +1,10 @@
+version: "2.4"
+services:
+  kaggle:
+    build:
+      context: ./
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./data:/kaggle/data
+      - ./log:/kaggle/log
