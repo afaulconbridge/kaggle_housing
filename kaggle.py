@@ -156,8 +156,8 @@ for n_estimators, max_leaf_nodes in ((1024, 64), (512, 128), (256, 256)):
 def mean_std_std(cv_results_):
     best = None
     best_i = None
-    for i, result in enumerate(cv_results_):
-        score = result['mean_test_score']-(2*result['std_test_score'])
+    for i in range(len(cv_results_['mean_test_score'])):
+        score = cv_results_['mean_test_score'][i]-(2*cv_results_['std_test_score'][i])
         if best is None or score > best:
             best = score
             best_i = i
@@ -193,15 +193,15 @@ for mean, std, params in zip(
 # print a score based on test data
 # this is a score based on unseen data
 # pipeline set to the best params and retrained automatically
-score = mean_absolute_error(y_test, pipe.predict(X_test))
+score = mean_absolute_error(y_test, gsc.best_estimator_.predict(X_test))
 print("Test mean absolute error =", score)
-print("RFE number of features = ", pipe.named_steps['rfe'].n_features_)
+print("RFE number of features = ", gsc.best_estimator_.named_steps['rfe'].n_features_)
 print("Number of records =", len(y_all))
 
 
 # print a score based only on training
 # using cross-validation here gives a measure of deviation
-scores = cross_val_score(pipe, X_train, y_train, 
+scores = cross_val_score(gsc.best_estimator_, X_train, y_train, 
                          n_jobs=-1,
                          cv=8,
                          scoring='neg_mean_absolute_error')
@@ -217,5 +217,5 @@ pipe.set_params(rfe__n_jobs=-1, impute__n_jobs=-1)
 pipe.fit(X_all, y_all)
 # predict on results set
 predicted = pipe.predict(X_predict)
-output = pd.DataFrame({'Id': X_predict.index, 'SalePrice': predicted})
+output = pd.DataFrame({'Id': data_predict["Id"], 'SalePrice': predicted})
 output.to_csv('data/submission.csv', index=False)
