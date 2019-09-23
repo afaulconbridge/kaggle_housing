@@ -55,3 +55,28 @@ import scipy.stats
 scipy.stats.skewtest(SimpleImputer(strategy='median').fit_transform(data[numerical_cols])).pvalue < 1e-5
 
 data[numerical_cols].columns[scipy.stats.skewtest(SimpleImputer(strategy='median').fit_transform(data[numerical_cols])).pvalue < 1e-5]
+
+
+# work out if any numeric columns have a majority in a single value
+# these could be augmented with a faux categorical
+
+for column in tuple(X_all[numerical_cols].columns):
+    values = X_all[column].value_counts()
+    max_i = None
+    for i in range(len(values)):
+        if max_i is None or values[values.axes[0][i]] > values[values.axes[0][max_i]]:
+            max_i = i
+    if max_i is not None:
+        i_count = values[values.axes[0][max_i]]
+        i_value = values.axes[0][max_i]
+        total_count = sum(values)
+        print(column)
+        print(i_count)
+        print(total_count)
+        if i_count > 0.5*total_count:
+            # this column should generate an extra column for most commom or not
+            # this column has to be numeric
+            extra_column = [1 if x == i_value else 0 for x in X_all[column]]
+            extra_column_name = "{}_{}".format(column, i_value)
+            X_all[extra_column_name] = extra_column
+

@@ -16,6 +16,7 @@ from sklearn.linear_model import LinearRegression, RANSACRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.ensemble import IsolationForest
 from sklearn.svm import OneClassSVM
+from sklearn.decomposition import PCA
 
 # Input data files are available in the "../input/" directory.
 
@@ -31,10 +32,10 @@ X_all = data.drop(['SalePrice'], axis=1)
 X_all = X_all.drop(['Id'], axis=1)
 
 # drop columns with too many missing (>25%)
-# TODO do this as part of ColumnTransformer
 X_all = X_all.dropna(axis=1, thresh=int(0.25*len(X_all)))
 # reduce prediction data to match train
 X_predict = data_predict[X_all.columns]
+
 
 #determine column types
 numerical_cols = [cname for cname in X_all.columns 
@@ -55,6 +56,40 @@ numerical_skew_cols = [cname for cname, skew in zip(
 numerical_nonskew_cols = [cname for cname, skew in zip(
                           X_all[numerical_cols].columns, 
                           skewed) if not skew]
+
+
+# work out if any numeric columns have a majority in a single value
+# these could be augmented with a faux categorical
+
+faux_categorical = []
+
+for column in tuple(X_all[numerical_cols].columns):
+    values = X_all[column].value_counts()
+    max_i = None
+    for i in range(len(values)):
+        if max_i is None or values[values.axes[0][i]] > values[values.axes[0][max_i]]:
+            max_i = i
+    if max_i is not None:
+        i_count = values[values.axes[0][max_i]]
+        i_value = values.axes[0][max_i]
+        total_count = sum(values)
+        print(column)
+        print(i_count)
+        print(total_count)
+        if i_count > 0.5*total_count:
+            # this column should generate an extra column for most commom or not
+            # this column has to be numeric
+
+            faux_categorical.append((column, i_value))
+
+        # TODO use small bins to handle numeric error
+
+for column, value in faux_categorical:
+    extra_column_name = "{}_{}".format(column, value)
+    print("Adding extra column {}".format(extra_column_name))
+    for dataset in (X_all, X_predict):
+        # TODO use a small range for comparison to avoid numeric error
+        dataset[extra_column_name] = [1 if x == value else 0 for x in dataset[column]]
 
 
 # split into test / train + validation
@@ -82,7 +117,6 @@ print("Removed {} outliers".format(sum(outliers == -1)))
 
 pipe = Pipeline(
     steps=[
-        # TODO remove outliers as preprocess step
         # pre-process to impute and encode
         ("impute", ColumnTransformer(
             transformers=[
@@ -105,6 +139,8 @@ pipe = Pipeline(
             remainder='drop',
             n_jobs=None
             )),
+#        # PCA to remove correlation between features
+#        ("pca", PCA(random_state=0)),
         # determine optimal features using recursive feature 
         # elimination with cros-validation        
         ("rfe", 
@@ -133,8 +169,7 @@ pipe = Pipeline(
                 validation_fraction=0.2,
                 max_leaf_nodes=512,
                 init=LinearRegression()
-            )
-        )
+            ))
     ],
 #    memory="/tmp/pipe"
 )
@@ -142,7 +177,8 @@ pipe = Pipeline(
 
 param_grid = []
 # this generally only works if max_n_estimators > leaf_nodes
-for n_estimators, max_leaf_nodes in ((1024, 64), (512, 128), (256, 256)):
+for n_estimators, max_leaf_nodes in ((2048, 32), (1024, 64), (512, 128), (256, 256)):
+#for n_estimators, max_leaf_nodes in ((2048, 32), (1024, 64)):
     # trade off directly between more trees and bigger trees
     params = {
         'model__n_estimators': [n_estimators],
